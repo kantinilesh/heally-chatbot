@@ -5,10 +5,10 @@ from sentence_transformers import SentenceTransformer
 from langchain_community.vectorstores import FAISS
 from langchain_community.llms import HuggingFaceHub
 from langchain.chains import ConversationalRetrievalChain
+from langchain.retrievers import MultiQueryRetriever
 from dotenv import load_dotenv
 import os
 import tempfile
-
 
 load_dotenv()  # Load variables from .env
 token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
@@ -133,24 +133,36 @@ def main():
     
     if st.button("Get Answer"):
         try:
+            # Ensure company_db is not None
+            if st.session_state.company_db is None:
+                st.error("Company knowledge base not initialized")
+                return
+            
             # Use a local fallback LLM if Hugging Face token is not available
             llm = HuggingFaceHub(
                 repo_id="google/flan-t5-small",
                 huggingfacehub_api_token=st.secrets.get("HUGGINGFACE_API_TOKEN")
             )
             
+            # Create a retriever from the company database
+            company_retriever = st.session_state.company_db.as_retriever()
+            
             # Retrieve context
             if st.session_state.pdf_db:
-                company_docs = st.session_state.company_db.similarity_search(question)
-                pdf_docs = st.session_state.pdf_db.similarity_search(question)
-                context = company_docs + pdf_docs
+                pdf_retriever = st.session_state.pdf_db.as_retriever()
+                
+                # Create a combined retriever
+                combined_retriever = MultiQueryRetriever.from_llm(
+                    retriever=company_retriever,
+                    llm=llm
+                )
             else:
-                context = st.session_state.company_db.similarity_search(question)
+                combined_retriever = company_retriever
             
             # Generate response
             chain = ConversationalRetrievalChain.from_llm(
                 llm=llm,
-                retriever=lambda q: context,
+                retriever=combined_retriever,
                 return_source_documents=True
             )
             
@@ -166,4 +178,4 @@ def main():
             st.error(f"Error generating response: {e}")
 
 if __name__ == "__main__":
-    main() 
+    main()
