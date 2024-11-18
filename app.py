@@ -20,7 +20,7 @@ def initialize_llm():
     try:
         # Use OpenAI's ChatGPT model
         llm = ChatOpenAI(
-            openai_api_key="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",
+            openai_api_key="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",
             model_name="gpt-3.5-turbo",  # You can change to gpt-4 if you prefer
             temperature=0.1,
             max_tokens=200
