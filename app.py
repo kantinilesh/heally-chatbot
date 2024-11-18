@@ -3,7 +3,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_community.llms import HuggingFaceEndpoint
+from langchain.chat_models import ChatOpenAI
 from langchain.chains import ConversationalRetrievalChain
 import os
 import tempfile
@@ -125,10 +125,11 @@ def main():
                 return
             
             try:
-                llm = HuggingFaceEndpoint(
-                    repo_id="google/flan-t5-small",
-                    temperature=0.1,
-                    max_new_tokens=200
+                # Use OpenAI as a fallback LLM
+                llm = ChatOpenAI(
+                    model="gpt-3.5-turbo", 
+                    temperature=0.1, 
+                    max_tokens=200
                 )
             except Exception as e:
                 st.error(f"LLM initialization error: {e}")
