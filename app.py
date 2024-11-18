@@ -1,36 +1,27 @@
 import streamlit as st
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.llms import HuggingFaceHub
 from langchain.chains import ConversationalRetrievalChain
-from langchain.retrievers import MultiQueryRetriever
 from dotenv import load_dotenv
 import os
 import tempfile
 
 load_dotenv()  # Load variables from .env
-token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
-# Error handling for embeddings
-def get_embeddings(model_name="all-MiniLM-L6-v2"):
+# Initialize embeddings
+def get_embeddings(model_name="sentence-transformers/all-MiniLM-L6-v2"):
     try:
-        model = SentenceTransformer(model_name)
-        return model
+        embeddings = HuggingFaceEmbeddings(model_name=model_name)
+        return embeddings
     except Exception as e:
         st.error(f"Error loading embeddings: {e}")
         return None
 
 # Initialize embeddings model
 embeddings_model = get_embeddings()
-
-def embedding_function(texts):
-    if embeddings_model:
-        return embeddings_model.encode(texts)
-    else:
-        st.error("Embeddings model not loaded")
-        return None
 
 # Initialize company knowledge base
 def initialize_company_knowledge():
@@ -61,7 +52,11 @@ def initialize_company_knowledge():
     company_texts = text_splitter.split_text(company_data)
     
     try:
-        company_db = FAISS.from_texts(company_texts, embedding_function)
+        if embeddings_model is None:
+            st.error("Embeddings model not initialized")
+            return None
+        
+        company_db = FAISS.from_texts(company_texts, embeddings_model)
         return company_db
     except Exception as e:
         st.error(f"Error creating company knowledge base: {e}")
@@ -83,7 +78,11 @@ def process_pdf(pdf_file):
         )
         texts = text_splitter.split_documents(pages)
         
-        db = FAISS.from_documents(texts, embedding_function)
+        if embeddings_model is None:
+            st.error("Embeddings model not initialized")
+            return None
+        
+        db = FAISS.from_documents(texts, embeddings_model)
         os.unlink(tmp_path)
         return db
     except Exception as e:
@@ -102,20 +101,22 @@ def main():
     try:
         if 'company_db' not in st.session_state:
             st.session_state.company_db = initialize_company_knowledge()
+            if st.session_state.company_db is None:
+                st.error("Failed to initialize company knowledge base")
     except Exception as e:
         st.error(f"Failed to initialize company knowledge base: {e}")
     
     if 'pdf_db' not in st.session_state:
         st.session_state.pdf_db = None
         
-    # Common questions sidebar
-    st.sidebar.header("Common Questions")
+    # Common questions
     common_questions = {
         "What is Collabor8?": "Provide an overview of Collabor8",
         "Pricing Details": "Explain the pricing plans",
         "Key Features": "List the main features of the platform"
     }
     
+    st.sidebar.header("Common Questions")
     selected_question = st.sidebar.radio("Select a common question:", list(common_questions.keys()))
     
     # PDF upload
@@ -138,31 +139,32 @@ def main():
                 st.error("Company knowledge base not initialized")
                 return
             
-            # Use a local fallback LLM if Hugging Face token is not available
+            # Use a local LLM 
             llm = HuggingFaceHub(
                 repo_id="google/flan-t5-small",
-                huggingfacehub_api_token=st.secrets.get("HUGGINGFACE_API_TOKEN")
+                huggingfacehub_api_token=os.getenv("HUGGINGFACEHUB_API_TOKEN")
             )
             
-            # Create a retriever from the company database
-            company_retriever = st.session_state.company_db.as_retriever()
+            # Create retrievers
+            company_retriever = st.session_state.company_db.as_retriever(search_kwargs={"k": 2})
             
             # Retrieve context
             if st.session_state.pdf_db:
-                pdf_retriever = st.session_state.pdf_db.as_retriever()
-                
-                # Create a combined retriever
-                combined_retriever = MultiQueryRetriever.from_llm(
-                    retriever=company_retriever,
-                    llm=llm
+                pdf_retriever = st.session_state.pdf_db.as_retriever(search_kwargs={"k": 2})
+                # Combine retrievers
+                from langchain.retrievers import BM25Retriever, EnsembleRetriever
+                ensemble_retriever = EnsembleRetriever(
+                    retrievers=[company_retriever, pdf_retriever],
+                    weights=[0.5, 0.5]
                 )
+                retriever = ensemble_retriever
             else:
-                combined_retriever = company_retriever
+                retriever = company_retriever
             
             # Generate response
             chain = ConversationalRetrievalChain.from_llm(
                 llm=llm,
-                retriever=combined_retriever,
+                retriever=retriever,
                 return_source_documents=True
             )
             
@@ -170,6 +172,12 @@ def main():
             
             # Display response
             st.write("Answer:", response['answer'])
+            
+            # Display source documents
+            if response.get('source_documents'):
+                st.write("Sources:")
+                for doc in response['source_documents']:
+                    st.write(doc.page_content[:300] + "...")
             
             # Update chat history
             st.session_state.chat_history.append((question, response['answer']))
