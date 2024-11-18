@@ -1,10 +1,9 @@
 import streamlit as st
+from langchain_openai import ChatOpenAI
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_community.llms import HuggingFacePipeline
-from transformers import pipeline
 from langchain.chains import ConversationalRetrievalChain
 import os
 import tempfile
@@ -19,13 +18,13 @@ def get_embeddings(model_name="sentence-transformers/all-MiniLM-L6-v2"):
 
 def initialize_llm():
     try:
-        # Use a small, local text generation model
-        generator = pipeline(
-            'text-generation', 
-            model='facebook/opt-125m', 
-            max_length=200
+        # Use OpenAI's ChatGPT model
+        llm = ChatOpenAI(
+            openai_api_key="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",
+            model_name="gpt-3.5-turbo",  # You can change to gpt-4 if you prefer
+            temperature=0.1,
+            max_tokens=200
         )
-        llm = HuggingFacePipeline(pipeline=generator)
         return llm
     except Exception as e:
         st.error(f"LLM initialization error: {e}")
