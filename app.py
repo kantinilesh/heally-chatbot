@@ -3,7 +3,8 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain.chat_models import ChatOpenAI
+from langchain.llms import HuggingFacePipeline
+from transformers import pipeline
 from langchain.chains import ConversationalRetrievalChain
 import os
 import tempfile
@@ -14,6 +15,20 @@ def get_embeddings(model_name="sentence-transformers/all-MiniLM-L6-v2"):
         return embeddings
     except Exception as e:
         st.error(f"Embeddings error: {e}")
+        return None
+
+def initialize_llm():
+    try:
+        # Use a small, local text generation model
+        generator = pipeline(
+            'text-generation', 
+            model='facebook/opt-125m', 
+            max_length=200
+        )
+        llm = HuggingFacePipeline(pipeline=generator)
+        return llm
+    except Exception as e:
+        st.error(f"LLM initialization error: {e}")
         return None
 
 def initialize_company_knowledge():
@@ -92,6 +107,9 @@ def main():
     try:
         if 'company_db' not in st.session_state:
             st.session_state.company_db = initialize_company_knowledge()
+        
+        if 'llm' not in st.session_state:
+            st.session_state.llm = initialize_llm()
     except Exception as e:
         st.error(f"Initialization error: {e}")
     
@@ -120,19 +138,8 @@ def main():
     
     if st.button("Get Answer"):
         try:
-            if st.session_state.company_db is None:
-                st.error("Company knowledge base not initialized")
-                return
-            
-            try:
-                # Use OpenAI as a fallback LLM
-                llm = ChatOpenAI(
-                    model="gpt-3.5-turbo", 
-                    temperature=0.1, 
-                    max_tokens=200
-                )
-            except Exception as e:
-                st.error(f"LLM initialization error: {e}")
+            if st.session_state.company_db is None or st.session_state.llm is None:
+                st.error("Systems not fully initialized")
                 return
             
             company_retriever = st.session_state.company_db.as_retriever(search_kwargs={"k": 2})
@@ -148,7 +155,7 @@ def main():
                 retriever = company_retriever
             
             chain = ConversationalRetrievalChain.from_llm(
-                llm=llm,
+                llm=st.session_state.llm,
                 retriever=retriever,
                 return_source_documents=True
             )
