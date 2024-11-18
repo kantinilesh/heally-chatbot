@@ -5,6 +5,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
+from dotenv import load_dotenv
 import os
 import tempfile
 
@@ -16,11 +17,17 @@ def get_embeddings(model_name="sentence-transformers/all-MiniLM-L6-v2"):
         st.error(f"Embeddings error: {e}")
         return None
 
+
+load_dotenv()
+
 def initialize_llm():
     try:
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise ValueError("OpenAI API key not found. Ensure it's set in the .env file.")
         # Use OpenAI's ChatGPT model
         llm = ChatOpenAI(
-            openai_api_key="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",
+            openai_api_key=openai_api_key,
             model_name="gpt-3.5-turbo",  # You can change to gpt-4 if you prefer
             temperature=0.1,
             max_tokens=200
