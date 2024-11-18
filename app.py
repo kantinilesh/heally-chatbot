@@ -3,7 +3,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain.llms import HuggingFacePipeline
+from langchain_community.llms import HuggingFacePipeline
 from transformers import pipeline
 from langchain.chains import ConversationalRetrievalChain
 import os
@@ -98,8 +98,8 @@ def process_pdf(pdf_file):
         return None
 
 def main():
-    st.title("Heally Assistant")
-    st.write("Hello! I'm your Heally assistant. I can help you with questions about Collabor8 and analyze PDF documents.")
+    st.title("Collabor8 Assistant")
+    st.write("Hello! I'm your Collabor8 assistant. I can help you with questions about the platform and analyze PDF documents.")
     
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
