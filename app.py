@@ -5,8 +5,13 @@ from sentence_transformers import SentenceTransformer
 from langchain_community.vectorstores import FAISS
 from langchain_community.llms import HuggingFaceHub
 from langchain.chains import ConversationalRetrievalChain
+from dotenv import load_dotenv
 import os
 import tempfile
+
+
+load_dotenv()  # Load variables from .env
+token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
 # Error handling for embeddings
 def get_embeddings(model_name="all-MiniLM-L6-v2"):
